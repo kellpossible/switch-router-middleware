@@ -1,0 +1,20 @@
+[package]
+name = "switch-router-middleware"
+description = "Routing middleware for reactive-state, which makes use of switch-router"
+version = "0.1.0"
+authors = ["Luke Frisken <l.frisken@gmail.com>"]
+edition = "2018"
+repository = "https://github.com/kellpossible/switch-router-middleware"
+readme = "README.md"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+switch-router = { git = "https://github.com/kellpossible/switch-router.git" }
+reactive-state = "0.1"
+serde = { version = "1.0", optional = true }
+log = "0.4"
+
+[features]
+default = []
