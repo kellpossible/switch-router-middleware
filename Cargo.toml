@@ -12,7 +12,7 @@ license = "MIT"
 
 [dependencies]
 switch-router = { git = "https://github.com/kellpossible/switch-router.git" }
-reactive-state = "0.1"
+reactive-state = "0.2"
 serde = { version = "1.0", optional = true }
 log = "0.4"
 
