@@ -9,34 +9,35 @@ use std::{
     hash::Hash,
     marker::PhantomData,
 };
-use switch_router::{SwitchRoute, SwitchRouteService};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use switch_router::{SwitchRouteService, SwitchRoute};
 
-pub struct RouteMiddleware<SR, State, Action, Event, Effect> {
-    pub router: RefCell<SwitchRouteService<SR>>,
+pub struct RouteMiddleware<R, RS, State, Action, Event, Effect> {
+    pub route_service: RefCell<RS>,
     /// The callback to the SwitchRouteService. When this gets dropped
     /// this listener will be removed from the route service.
-    _callback: switch_router::Callback<SR>,
+    _callback: switch_router::Callback<R>,
     state_type: PhantomData<State>,
     action_type: PhantomData<Action>,
     event_type: PhantomData<Event>,
     effect_type: PhantomData<Effect>,
 }
 
-impl<SR, State, Action, Event, Effect> RouteMiddleware<SR, State, Action, Event, Effect>
+impl<R, RS, State, Action, Event, Effect> RouteMiddleware<R, RS, State, Action, Event, Effect>
 where
-    SR: SwitchRoute + 'static,
+    R: SwitchRoute + 'static,
+    RS: SwitchRouteService<Route = R> + 'static,
     State: 'static,
-    Action: IsRouteAction<SR> + 'static,
+    Action: IsRouteAction<R> + 'static,
     Event: Clone + Hash + Eq + StoreEvent + 'static,
     Effect: 'static,
 {
-    pub fn new(store: StoreRef<State, Action, Event, Effect>) -> Self {
-        let router = RefCell::new(SwitchRouteService::new());
-        let callback: switch_router::Callback<SR> =
-            switch_router::Callback::new(move |route: SR| {
+    pub fn new(route_service: RS, store: StoreRef<State, Action, Event, Effect>) -> Self {
+        let router = RefCell::new(route_service);
+        let callback: switch_router::Callback<R> =
+            switch_router::Callback::new(move |route: R| {
                 store.dispatch(RouteAction::BrowserChangeRoute(route));
             });
 
@@ -51,7 +52,7 @@ where
         }
 
         Self {
-            router,
+            route_service: router,
             _callback: callback,
             state_type: PhantomData,
             action_type: PhantomData,
@@ -60,8 +61,8 @@ where
         }
     }
 
-    fn set_route<SRI: Into<SR>>(&self, switch_route: SRI) {
-        match self.router.try_borrow_mut() {
+    fn set_route<SRI: Into<R>>(&self, switch_route: SRI) {
+        match self.route_service.try_borrow_mut() {
             Ok(mut router) => {
                 router.set_route(switch_route);
             }
@@ -72,13 +73,14 @@ where
     }
 }
 
-impl<SR, State, Action, Event, Effect> Middleware<State, Action, Event, Effect>
-    for RouteMiddleware<SR, State, Action, Event, Effect>
+impl<R, RS, State, Action, Event, Effect> Middleware<State, Action, Event, Effect>
+    for RouteMiddleware<R, RS, State, Action, Event, Effect>
 where
-    SR: SwitchRoute + 'static,
-    Action: IsRouteAction<SR> + Debug + 'static,
-    State: RouteState<SR> + 'static,
-    Event: RouteEvent<SR> + PartialEq + Clone + Hash + Eq + StoreEvent + 'static,
+    R: SwitchRoute + 'static,
+    RS: SwitchRouteService<Route = R> + 'static,
+    Action: IsRouteAction<R> + Debug + 'static,
+    State: RouteState<R> + 'static,
+    Event: RouteEvent<R> + PartialEq + Clone + Hash + Eq + StoreEvent + 'static,
     Effect: 'static,
 {
     fn on_reduce(
@@ -93,7 +95,7 @@ where
                     RouteAction::ChangeRoute(route) => {
                         self.set_route(route.clone());
                     }
-                    RouteAction::PollBrowserRoute => match self.router.try_borrow_mut() {
+                    RouteAction::PollBrowserRoute => match self.route_service.try_borrow_mut() {
                         Ok(router_mut) => {
                             let route = router_mut.get_route();
                             return reduce(
