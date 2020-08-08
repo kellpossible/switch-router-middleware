@@ -67,7 +67,19 @@ where
                 router.set_route(switch_route);
             }
             Err(err) => {
-                error!("Unable to set route with no callback: {}", err);
+                error!("Unable to borrow route_service for RouteMiddleware: {}", err);
+            }
+        }
+    }
+
+    fn back(&self) -> Option<R> {
+        match self.route_service.try_borrow_mut() {
+            Ok(mut router) => {
+                router.back()
+            }
+            Err(err) => {
+                error!("Unable to borrow route_service for RouteMiddleware: {}", err);
+                None
             }
         }
     }
@@ -92,6 +104,13 @@ where
         if let Some(action) = &action {
             if let Some(route_action) = action.route_action() {
                 match route_action {
+                    RouteAction::Back => {
+                        self.back();
+                        return reduce(
+                            store,
+                            None,
+                        );
+                    }
                     RouteAction::ChangeRoute(route) => {
                         self.set_route(route.clone());
                     }
@@ -129,6 +148,7 @@ where
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Clone)]
 pub enum RouteAction<SR> {
+    Back,
     ChangeRoute(SR),
     BrowserChangeRoute(SR),
     PollBrowserRoute,
@@ -140,6 +160,7 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            RouteAction::Back => write!(f, "Back"),
             RouteAction::ChangeRoute(route) => write!(f, "ChangeRoute({:?})", route),
             RouteAction::BrowserChangeRoute(route) => write!(f, "BrowserChangeRoute({:?})", route),
             RouteAction::PollBrowserRoute => write!(f, "PollBrowserRoute"),
