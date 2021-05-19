@@ -1,7 +1,7 @@
 use log::error;
 use reactive_state::{
     middleware::{Middleware, ReduceFn},
-    Store, StoreEvent, StoreRef,
+    Store, StoreRef,
 };
 use std::{
     cell::RefCell,
@@ -12,7 +12,7 @@ use std::{
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use switch_router::{SwitchRouteService, SwitchRoute};
+use switch_router::{SwitchRoute, SwitchRouteService};
 
 pub struct RouteMiddleware<R, RS, State, Action, Event, Effect> {
     pub route_service: RefCell<RS>,
@@ -31,15 +31,14 @@ where
     RS: SwitchRouteService<Route = R> + 'static,
     State: 'static,
     Action: IsRouteAction<R> + 'static,
-    Event: Clone + Hash + Eq + StoreEvent + 'static,
+    Event: Clone + Hash + Eq + 'static,
     Effect: 'static,
 {
     pub fn new(route_service: RS, store: StoreRef<State, Action, Event, Effect>) -> Self {
         let router = RefCell::new(route_service);
-        let callback: switch_router::Callback<R> =
-            switch_router::Callback::new(move |route: R| {
-                store.dispatch(RouteAction::BrowserChangeRoute(route));
-            });
+        let callback: switch_router::Callback<R> = switch_router::Callback::new(move |route: R| {
+            store.dispatch(RouteAction::BrowserChangeRoute(route));
+        });
 
         // FIXME: there is multiple borrow error with this callback
         match router.try_borrow_mut() {
@@ -67,18 +66,22 @@ where
                 router.set_route(switch_route);
             }
             Err(err) => {
-                error!("Unable to borrow route_service for RouteMiddleware: {}", err);
+                error!(
+                    "Unable to borrow route_service for RouteMiddleware: {}",
+                    err
+                );
             }
         }
     }
 
     fn back(&self) -> Option<R> {
         match self.route_service.try_borrow_mut() {
-            Ok(mut router) => {
-                router.back()
-            }
+            Ok(mut router) => router.back(),
             Err(err) => {
-                error!("Unable to borrow route_service for RouteMiddleware: {}", err);
+                error!(
+                    "Unable to borrow route_service for RouteMiddleware: {}",
+                    err
+                );
                 None
             }
         }
@@ -92,7 +95,7 @@ where
     RS: SwitchRouteService<Route = R> + 'static,
     Action: IsRouteAction<R> + Debug + 'static,
     State: RouteState<R> + 'static,
-    Event: RouteEvent<R> + PartialEq + Clone + Hash + Eq + StoreEvent + 'static,
+    Event: RouteEvent<R> + PartialEq + Clone + Hash + Eq + 'static,
     Effect: 'static,
 {
     fn on_reduce(
@@ -106,10 +109,7 @@ where
                 match route_action {
                     RouteAction::Back => {
                         self.back();
-                        return reduce(
-                            store,
-                            None,
-                        );
+                        return reduce(store, None);
                     }
                     RouteAction::ChangeRoute(route) => {
                         self.set_route(route.clone());
@@ -184,7 +184,7 @@ where
     SR: SwitchRoute + 'static,
     Action: IsRouteAction<SR>,
     State: RouteState<SR>,
-    Event: RouteEvent<SR> + PartialEq + StoreEvent + Clone + Hash + Eq,
+    Event: RouteEvent<SR> + PartialEq + Clone + Hash + Eq,
 {
     fn change_route<R: Into<SR>>(&self, route: R) {
         self.dispatch(RouteAction::ChangeRoute(route.into()));
